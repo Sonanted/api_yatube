@@ -1,7 +1,7 @@
-import django.core.exceptions
-from posts.models import Comment, Group, Post
-from rest_framework import viewsets
+from django.shortcuts import get_object_or_404
+from rest_framework import permissions, viewsets
 
+from posts.models import Group, Post
 from .serializers import CommentSerializer, GroupSerializer, PostSerializer
 
 UPDATE_POST_DENIED = 'Изменение чужого поста запрещено!'
@@ -10,22 +10,18 @@ UPDATE_COMMENT_DENIED = 'Изменение чужого комментария 
 DELETE_COMMENT_DENIED = 'Удаление чужого комментария запрещено!'
 
 
+class IsAuthor(permissions.BasePermission):
+    def has_object_permission(self, request, view, obj):
+        return request.user == obj.author
+
+
 class PostViewSet(viewsets.ModelViewSet):
     queryset = Post.objects.all()
     serializer_class = PostSerializer
+    permission_classes = (IsAuthor, permissions.IsAuthenticated)
 
     def perform_create(self, serializer):
         serializer.save(author=self.request.user)
-
-    def perform_update(self, serializer):
-        if serializer.instance.author != self.request.user:
-            raise django.core.exceptions.PermissionDenied(UPDATE_POST_DENIED)
-        super(PostViewSet, self).perform_update(serializer)
-
-    def perform_destroy(self, instance):
-        if instance.author != self.request.user:
-            raise django.core.exceptions.PermissionDenied(DELETE_POST_DENIED)
-        super(PostViewSet, self).perform_destroy(instance)
 
 
 class GroupViewSet(viewsets.ReadOnlyModelViewSet):
@@ -35,21 +31,13 @@ class GroupViewSet(viewsets.ReadOnlyModelViewSet):
 
 class CommentViewSet(viewsets.ModelViewSet):
     serializer_class = CommentSerializer
+    permission_classes = (IsAuthor, permissions.IsAuthenticated)
 
     def perform_create(self, serializer):
-        serializer.save(author=self.request.user)
-
-    def perform_update(self, serializer):
-        if serializer.instance.author != self.request.user:
-            raise django.core.exceptions.PermissionDenied(
-                UPDATE_COMMENT_DENIED)
-        super(CommentViewSet, self).perform_update(serializer)
-
-    def perform_destroy(self, instance):
-        if instance.author != self.request.user:
-            raise django.core.exceptions.PermissionDenied(
-                DELETE_COMMENT_DENIED)
-        super(CommentViewSet, self).perform_destroy(instance)
+        serializer.save(
+            post=get_object_or_404(Post, id=self.kwargs.get('post_id')),
+            author=self.request.user)
 
     def get_queryset(self):
-        return Comment.objects.filter(post=self.kwargs.get('post_id'))
+        post = get_object_or_404(Post, id=self.kwargs.get('post_id'))
+        return post.comments.all()
