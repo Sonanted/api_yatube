@@ -4,15 +4,11 @@ from rest_framework import permissions, viewsets
 from posts.models import Group, Post
 from .serializers import CommentSerializer, GroupSerializer, PostSerializer
 
-UPDATE_POST_DENIED = 'Изменение чужого поста запрещено!'
-DELETE_POST_DENIED = 'Удаление чужого поста запрещено!'
-UPDATE_COMMENT_DENIED = 'Изменение чужого комментария запрещено!'
-DELETE_COMMENT_DENIED = 'Удаление чужого комментария запрещено!'
-
 
 class IsAuthor(permissions.BasePermission):
     def has_object_permission(self, request, view, obj):
-        return request.user == obj.author
+        return (request.method in permissions.SAFE_METHODS
+                or request.user == obj.author)
 
 
 class PostViewSet(viewsets.ModelViewSet):
@@ -33,11 +29,11 @@ class CommentViewSet(viewsets.ModelViewSet):
     serializer_class = CommentSerializer
     permission_classes = (IsAuthor, permissions.IsAuthenticated)
 
+    def get_post(self):
+        return get_object_or_404(Post, id=self.kwargs.get('post_id'))
+
     def perform_create(self, serializer):
-        serializer.save(
-            post=get_object_or_404(Post, id=self.kwargs.get('post_id')),
-            author=self.request.user)
+        serializer.save(post=self.get_post(), author=self.request.user)
 
     def get_queryset(self):
-        post = get_object_or_404(Post, id=self.kwargs.get('post_id'))
-        return post.comments.all()
+        return self.get_post().comments.all()

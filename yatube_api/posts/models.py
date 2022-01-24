@@ -30,7 +30,7 @@ class Post(models.Model):
     )
 
     def __str__(self):
-        return f'{self.group}. {self.author}: {self.text[:25]}'
+        return f'{self.group}. {self.author.username}: {self.text[:25]}'
 
 
 class Comment(models.Model):
